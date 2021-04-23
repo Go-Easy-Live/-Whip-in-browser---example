@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html style="margin:0; padding:0;display: flex;flex-direction: column; width: 100%;height: 100%;">
+<head>
+    <title>Whip test</title>
+</head>
+<body style="margin:0; padding:0;display: flex;flex-direction: column; width: 100%;height: 100%;">
+    <div style="display: flex;height: 10%; padding:10px;">
+        <textarea class="urls" style="height:100%;flex: 1;"/></textarea>
+    </div>
+    <div style="display: flex;flex:1;padding:10px;">
+        <div style="display: flex;flex-direction: column;">
+            <select class="resolution"style="margin:10px">
+                <option value="360">360</option>
+                <option value="720" selected="selected">720</option>
+                <option value="1080">1080</option>
+            </select>
+            <input class="get_stream" type="button" value="get stream" style="margin:10px"/>
+            <input class="send_stream" type="button" value="send stream" style="margin:10px;display:none;"/>
+        </div>
+        <div style="display: flex;flex:1">
+            <video autoplay controls="controls" muted="muted" style="width: 100%"></video>
+        </div>
+    </div>
+    <script type="text/javascript">
+        var stream = null;
+
+        var getStream = async function() {
+
+            var constraints = getConstraints();
+
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+            const video = document.querySelector("video");
+
+            video.srcObject = stream;
+
+            document.querySelector('.send_stream').style.display = "";
+        };
+
+
+        var getResolution = function() {
+
+            var supportedConstraints = navigator.mediaDevices.getSupportedConstraints();
+
+            var resolutionInp = document.querySelector('.resolution');
+
+            localStorage.setItem('resolution', resolutionInp.value );
+
+            if (supportedConstraints.aspectRatio && supportedConstraints.height && supportedConstraints.width ){
+
+                let min = parseInt( resolutionInp.value );
+                let max = 640;
+
+                if(min === 360) {
+                    max = 640;
+                } else if (min === 720) {
+                    max = 1280;
+                } else if (min === 1080) {
+                    max = 1920;
+                }
+
+                var aspectRatio = parseFloat(16/9);
+
+                return {
+                    max,
+                    min,
+                    aspectRatio
+                };
+
+            } else {
+                return null;
+            }
+        };
+
+
+        var getConstraints = function() {
+            var user = {};
+
+            var supportedConstraints = navigator.mediaDevices.getSupportedConstraints();
+            var resolution = getResolution();
+
+            user.video = {};
+
+            if (supportedConstraints.width) {
+                user.video.width = {
+                    max : resolution.max,
+                    min : resolution.min
+                };
+            }
+            if (supportedConstraints.height) {
+                user.video.height = {
+                    max : resolution.max,
+                    min : resolution.min
+                };
+            }
+            if (supportedConstraints.aspectRatio) {
+                user.video.aspectRatio = {
+                    ideal : 16/9
+                };
+            }
+
+            if (supportedConstraints.frameRate){
+                user.video.frameRate = {
+                    ideal: 30,
+                    min: 5,
+                    max: 30
+                };
+            }
+
+            user.audio = {};
+
+            if (supportedConstraints.autoGainControl){
+                user.audio.autoGainControl =    { ideal: true };
+            }
+
+            if (supportedConstraints.echoCancellation){
+                user.audio.echoCancellation =   { ideal: true };
+            }
+
+            if (supportedConstraints.noiseSuppression){
+                user.audio.noiseSuppression =   { ideal: true };
+            }
+
+            if (supportedConstraints.sampleRate){
+                user.audio.sampleRate =         { ideal: 48000 };
+            }
+            if (supportedConstraints.sampleSize){
+                user.audio.sampleSize =         { ideal: 16 };
+            }
+            if (supportedConstraints.channelCount){
+                user.audio.channelCount =       { ideal: 2 };
+            }
+
+            return user;
+        };
+
+        var sendStream = async function() {
+
+
+           localStorage.setItem('urls', document.querySelector('.urls').value );
+
+
+           let lines = document.querySelector('.urls').value.split("\n");
+            for(var line of lines) {
+                url = line.replace(/^\s+|\s+$/g, "");
+
+                if(!url) {
+                    continue;
+                }
+
+                //Get mic+cam
+                //Create peerconnection
+                const pc = new RTCPeerConnection();
+
+                //Listen for state change events
+                pc.onconnectionstatechange = (event) =>{
+                    switch(pc.connectionState) {
+                        case "connected":
+                            // The connection has become fully connected
+                            break;
+                        case "disconnected":
+                        case "failed":
+                          // One or more transports has terminated unexpectedly or in an error
+                            break;
+                        case "closed":
+                            // The connection has been closed
+                            break;
+                    }
+                }
+
+                //Send all tracks
+                for (const track of stream.getTracks())
+                  //You could add simulcast too here
+                    pc.addTrack(track);
+
+                //Create SDP offer
+                const offer = await pc.createOffer();
+
+                //Set it
+                await pc.setLocalDescription(offer)
+
+                //Do the post request to the WHIP endpoint with the SDP offer
+                const fetched = await fetch(url, {
+                    method: "POST",
+                    body: offer.sdp,
+                    headers:{
+                        "Content-Type": "application/sdp",
+                        "Origin" :"http://localhost"
+                    }
+                });
+
+                //Get the SDP answer
+                const answer = await fetched.text();
+
+                //And set it
+                await pc.setRemoteDescription({type:"answer",sdp: answer});
+            }
+
+        }
+
+
+        var getStreamBtn = document.querySelector('.get_stream');
+
+        getStreamBtn.onclick = getStream;
+
+
+        var sendStreamBtn = document.querySelector('.send_stream');
+
+        sendStreamBtn.onclick = sendStream;
+
+        var urls = localStorage.getItem('urls');
+
+        if(urls) {
+            document.querySelector('.urls').value = urls;
+        }
+
+        var resolution = localStorage.getItem('resolution');
+
+        if(resolution) {
+            document.querySelector('.resolution').value = resolution;
+        }
+
+
+    </script>
+</body>
+</html>
+
