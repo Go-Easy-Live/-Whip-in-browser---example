@@ -10,6 +10,9 @@
     <div style="display: flex;flex:1;padding:10px;">
         <div style="display: flex;flex-direction: column;">
             <select class="resolution"style="margin:10px">
+                <option value="36">36</option>
+                <option value="72">72</option>
+                <option value="144">144</option>
                 <option value="360">360</option>
                 <option value="720" selected="selected">720</option>
                 <option value="1080">1080</option>
@@ -51,13 +54,20 @@
                 let min = parseInt( resolutionInp.value );
                 let max = 640;
 
-                if(min === 360) {
+                if(min === 36) {
+                    max = 64;
+                } else if (min === 72) {
+                    max = 128;
+                } else if (min === 144) {
+                    max = 256;
+                } else if (min === 360) {
                     max = 640;
                 } else if (min === 720) {
                     max = 1280;
                 } else if (min === 1080) {
                     max = 1920;
                 }
+
 
                 var aspectRatio = parseFloat(16/9);
 
